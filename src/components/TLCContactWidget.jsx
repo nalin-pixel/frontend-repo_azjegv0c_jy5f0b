@@ -14,6 +14,8 @@ const API_BASE = import.meta.env.VITE_BACKEND_URL || ''
 export default function TLCContactWidget() {
   const [form, setForm] = useState({ email: '', subject: '', message: '' })
   const [status, setStatus] = useState({ state: 'idle', message: '' })
+  const [particles, setParticles] = useState([])
+  const [burstKey, setBurstKey] = useState(0) // force reflow for repeated bursts
 
   const bgStyle = useMemo(() => ({
     background: `radial-gradient(1200px 600px at 10% 0%, rgba(39,255,0,0.08), transparent 60%),
@@ -21,9 +23,34 @@ export default function TLCContactWidget() {
                  linear-gradient(135deg, #000052 0%, #00003a 100%)`,
   }), [])
 
+  const triggerBurst = () => {
+    // Create an exciting particle burst with gradient accents
+    const count = 22
+    const colors = ['#27FF00', '#33eebb', '#449ddd', '#e8e8e8']
+    const newParticles = Array.from({ length: count }).map((_, i) => {
+      const angle = (Math.PI * 2 * i) / count + Math.random() * 0.6
+      const distance = 40 + Math.random() * 80
+      const dx = Math.cos(angle) * distance
+      const dy = Math.sin(angle) * distance
+      const size = 4 + Math.random() * 6
+      const dur = 500 + Math.random() * 400
+      const delay = Math.random() * 40
+      const color = colors[Math.floor(Math.random() * colors.length)]
+      const rotate = Math.random() * 360
+      return { id: `${Date.now()}-${i}`, dx, dy, size, dur, delay, color, rotate }
+    })
+    setBurstKey((k) => k + 1)
+    setParticles(newParticles)
+    // Auto-clear after animations finish
+    setTimeout(() => setParticles([]), 1100)
+  }
+
   const submit = async (e) => {
     e.preventDefault()
     if (status.state === 'loading') return
+
+    // Fire burst immediately on click
+    triggerBurst()
     setStatus({ state: 'loading', message: 'Sending...' })
 
     try {
@@ -43,6 +70,43 @@ export default function TLCContactWidget() {
 
   return (
     <div className={`${PFX}-wrap w-full min-h-[100vh] flex items-center justify-center p-6`} style={bgStyle}>
+      {/* Scoped styles for the burst animation */}
+      <style>{`
+        .${PFX}-btn { transform: translateZ(0); }
+        .${PFX}-btn:active { transform: translateZ(0) scale(0.98); }
+        .${PFX}-burst {
+          position: absolute;
+          top: 50%;
+          left: 50%;
+          transform: translate(-50%, -50%);
+          pointer-events: none;
+        }
+        .${PFX}-particle {
+          position: absolute;
+          left: 0; top: 0;
+          border-radius: 9999px;
+          will-change: transform, opacity;
+          animation: ${PFX}-explode var(--dur) cubic-bezier(.21,1,.29,1) var(--delay) forwards;
+          box-shadow: 0 0 12px currentColor;
+        }
+        @keyframes ${PFX}-explode {
+          0% { opacity: 1; transform: translate(-50%, -50%) rotate(0deg) scale(1); }
+          60% { opacity: 1; }
+          100% { opacity: 0; transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) rotate(180deg) scale(0.7); }
+        }
+        /* subtle ripples */
+        .${PFX}-ripple {
+          position: absolute; inset: 0; border-radius: 1rem; pointer-events: none; overflow: hidden;
+        }
+        .${PFX}-ripple::after {
+          content: '';
+          position: absolute; inset: -20%; border-radius: inherit;
+          background: radial-gradient(50% 50% at 50% 50%, rgba(255,255,255,0.35), rgba(255,255,255,0) 60%);
+          opacity: 0; animation: ${PFX}-ripple 800ms ease-out var(--delay, 0ms) forwards;
+        }
+        @keyframes ${PFX}-ripple { 0% { opacity: 0; } 25% { opacity: .6; } 100% { opacity: 0; } }
+      `}</style>
+
       <div className={`${PFX}-card w-full max-w-xl relative overflow-hidden rounded-[1.5rem] bg-white shadow-[0_10px_40px_rgba(0,0,0,0.25)]`}>
         <div className={`${PFX}-header relative h-28 flex items-center justify-center`}
              style={{
@@ -130,13 +194,38 @@ export default function TLCContactWidget() {
             </div>
             <button
               type="submit"
-              className="relative inline-flex items-center px-5 py-3 rounded-2xl font-semibold text-white shadow-lg overflow-hidden"
+              className={`${PFX}-btn relative inline-flex items-center px-5 py-3 rounded-2xl font-semibold text-white shadow-lg overflow-hidden active:scale-[0.98] transition-transform`}
               style={{ background: 'linear-gradient(135deg, #27FF00, #449ddd)' }}
               disabled={status.state === 'loading'}
             >
-              <span className="relative z-10">Send message</span>
+              {/* Ripples on burst */}
+              <span className={`${PFX}-ripple`} style={{ '--delay': '60ms' }} />
+
+              <span className="relative z-10">{status.state === 'loading' ? 'Sending…' : 'Send message'}</span>
               <span className="absolute inset-0 opacity-0 hover:opacity-100 transition-opacity"
                     style={{ background: 'radial-gradient(60% 220% at 50% 0%, rgba(255,255,255,0.25), transparent 60%)' }} />
+
+              {/* Particle burst layer */}
+              <span key={burstKey} className={`${PFX}-burst`} aria-hidden>
+                {particles.map((p) => (
+                  <span
+                    key={p.id}
+                    className={`${PFX}-particle`}
+                    style={{
+                      width: `${p.size}px`,
+                      height: `${p.size}px`,
+                      background: p.color,
+                      color: p.color,
+                      '--dx': `${p.dx}px`,
+                      '--dy': `${p.dy}px`,
+                      '--dur': `${p.dur}ms`,
+                      '--delay': `${p.delay}ms`,
+                      transform: 'translate(-50%, -50%)',
+                      rotate: `${p.rotate}deg`,
+                    }}
+                  />
+                ))}
+              </span>
             </button>
           </div>
         </form>
